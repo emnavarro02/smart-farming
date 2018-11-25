@@ -20,6 +20,7 @@ const char* mqtt_server = "192.168.137.239";
 const char* mqtt_topic = "data_monitoring";
 const char* mqtt_username = "mqttuser";
 const char* mqtt_password = "mqttpwd";
+const char* clientID = "5c:cf:7f:30:10:cd";
 
 int value = 0;
 

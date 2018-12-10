@@ -33,7 +33,7 @@ char mqtt_server[40] = "192.168.10.1";
 char mqtt_port[5] = "1883";
 const char* mqtt_topic = "monitoring_data";
 char mqtt_user[40] = "mqttuser"; 
-char mqtt_password [40] = "mqttpass";
+char mqtt_password [40] = "mqttpwd";
 char* clientID = "5C:CF:7F:30:10:CD";
 
 //initial value of sensor
@@ -272,7 +272,7 @@ void loop(){
     digitalWrite(DRY, HIGH);
   }
   
-  delay(60000);
+  delay(10000);
   digitalWrite(WET,LOW);
   digitalWrite(DRY, LOW);
 
@@ -315,7 +315,7 @@ void sendTemperature(){
 
 void publishOnMQTT(char* JSONmessageBuffer){
   // PUBLISH to the MQTT Broker (topic = mqtt_topic, defined at the beginning)
-  if ( mqttClient.publish(mqtt_topic, JSONmessageBuffer, 1) ){
+  if (mqttClient.publish(mqtt_topic, JSONmessageBuffer, 1) ){
     Serial.println("TEMPERATURE SENT TO MQTT");
   }
   else{

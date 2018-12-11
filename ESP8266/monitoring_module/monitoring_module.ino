@@ -284,7 +284,7 @@ void sendMoistureLevel(){
  JsonObject& JSONEncoder = MesssageJSONBuffer.createObject();
  JSONEncoder["device"] = clientID;
  JSONEncoder["sensorType"] = "Moisture";
- JSONEncoder["Value"] = moisture_sensor_value;
+ JSONEncoder["value"] = moisture_sensor_value;
  
  char JSONmessageBuffer[100];
  JSONEncoder.printTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
@@ -301,7 +301,7 @@ void sendTemperature(){
   JsonObject& JSONEncoder = MesssageJSONBuffer.createObject();
   JSONEncoder["device"] = clientID;
   JSONEncoder["sensorType"] = "Temperature";
-  JSONEncoder["Value"] = one_wire_temperature;
+  JSONEncoder["value"] = one_wire_temperature;
   
   char JSONmessageBuffer[100];
   JSONEncoder.printTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));

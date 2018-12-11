@@ -22,6 +22,6 @@ while True:
         #print(newTemp)
         oldTemp = newTemp
         print("Temperature has changed. New Temperature is: ", newTemp.rstrip())
-        # publish(topic, payload=None, qos=0, retain=False)
+        publish(topic, payload=None, qos=0, retain=False)
         client.publish("monitoring_data", newTemp.rstrip(),qos=1) #publish
         time.sleep(4)

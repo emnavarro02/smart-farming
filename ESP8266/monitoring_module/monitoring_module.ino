@@ -316,7 +316,7 @@ void sendTemperature(){
 void publishOnMQTT(char* JSONmessageBuffer){
   // PUBLISH to the MQTT Broker (topic = mqtt_topic, defined at the beginning)
   if (mqttClient.publish(mqtt_topic, JSONmessageBuffer, 1) ){
-    Serial.println("TEMPERATURE SENT TO MQTT");
+    Serial.println("Value sent to Mqtt");
   }
   else{
     Serial.println("Message failed to send. Reconnecting to MQTT Broker and trying again");

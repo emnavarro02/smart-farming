@@ -4,7 +4,7 @@
    File name: MQTT_subscriber.py
    Author: Emerson Navarro
    Date created: 11/25/2018
-   Date last modified: 11/12/2018
+   Date last modified: 12/12/2018
    Python version: 2.7
 """
 import time
@@ -20,41 +20,59 @@ MQTT_password = get_pass() #retrives MQTT broker password securely
 broker = CONSTANT.MQTT_SERVER #get_lan_ip()
 Broker_ID = CONSTANT.BROKER_ID
 
-def parseMessage(message):
-    print("parsing message")
+MQTT_Firebase.startListener(CONSTANT.BROKER_ID)
+
+def messageDispatcher(message):
+    
     m_decode = str(message)
     m_in = json.loads(m_decode)
-    #print m_in
 
     data = {'Value':m_in[CONSTANT.MONITORING_MOD_VALUE],'TimeStamp': str(datetime.datetime.utcnow())}
-    #print(data)
     MQTT_Firebase.postMessageToFirebase(Broker_ID, m_in[CONSTANT.MONITORING_MOD_DEVICE], m_in[CONSTANT.MONITORING_MOD_SENSOR_TYPE],data)
 
     if m_in[CONSTANT.MONITORING_MOD_SENSOR_TYPE] == "Temperature":
         if m_in[CONSTANT.MONITORING_MOD_VALUE] > MQTT_Firebase.tempThreshold.high:
-            #TURN ON TEMPERATURE ALERT
+
+            #Enables a temperature alert
             MQTT_Firebase.postAlertToFirebase(Broker_ID,m_in[CONSTANT.MONITORING_MOD_DEVICE],m_in[CONSTANT.MONITORING_MOD_SENSOR_TYPE],CONSTANT.ON)
-            if MQTT_Firebase.fan.state == CONSTANT.OFF:
+            
+            # check and enable the Fan.
+            fanStatus = MQTT_Firebase.getModuleOutputStatus(CONSTANT.BROKER_ID,m_in[CONSTANT.MONITORING_MOD_DEVICE])
+            print ("Fan status: " + str(fanStatus))
+            print (fanStatus['Fan']['State'])
+            if fanStatus['Fan']['State'] == CONSTANT.OFF:
                 #TURN ON THE FAN
                 MQTT_Firebase.setOutputOnFirebase(Broker_ID,m_in[CONSTANT.MONITORING_MOD_DEVICE],CONSTANT.F_ACTUATOR_FAN,CONSTANT.ON)
-        else: # m_in["Value"] <= MQTT_Firebase.tempThreshold.high:
-            #TURN OFF TEMPERATURE ALERT
+        else:
+            #Disables temperature alert
             MQTT_Firebase.postAlertToFirebase(Broker_ID,m_in[CONSTANT.MONITORING_MOD_DEVICE],m_in[CONSTANT.MONITORING_MOD_SENSOR_TYPE],CONSTANT.OFF)
-            if MQTT_Firebase.fan.state == CONSTANT.ON and MQTT_Firebase.fan.userAction == CONSTANT.OFF:
+            
+            #fanState = MQTT_Firebase.getModuleAlertForSensor(CONSTANT.BROKER_ID, m_in[CONSTANT.MONITORING_MOD_DEVICE],"Temperature")
+            fanStatus = MQTT_Firebase.getModuleOutputStatus(CONSTANT.BROKER_ID,m_in[CONSTANT.MONITORING_MOD_DEVICE])
+            #print ("Fan status: " + str(fanStatus))
+            #print ("State of FAN: " + str(fanStatus['Fan']['State']))
+            #print ("User Enabled? : " + str(fanStatus['Fan']['UserAction']))
+            if fanStatus['Fan']['State'] == CONSTANT.ON and fanStatus['Fan']['UserAction'] == CONSTANT.OFF:
                 #TURN OFF THE FAN
                 MQTT_Firebase.setOutputOnFirebase(Broker_ID,m_in[CONSTANT.MONITORING_MOD_DEVICE],CONSTANT.F_ACTUATOR_FAN,CONSTANT.OFF)
-
-    if m_in[CONSTANT.MONITORING_MOD_SENSOR_TYPE] == "Moisture":
+    
+    elif m_in[CONSTANT.MONITORING_MOD_SENSOR_TYPE] == "Moisture":
         if m_in[CONSTANT.MONITORING_MOD_VALUE] > MQTT_Firebase.moistThreshold.high:
-            #TURN ON TEMPERATURE ALERT
-            MQTT_Firebase.postAlertToFirebase(Broker_ID,m_in[CONSTANT.MONITORING_MOD_DEVICE],m_in[CONSTANT.MONITORING_MOD_SENSOR_TYPE],CONSTANT.ON)
-            if MQTT_Firebase.irrigation.state == CONSTANT.OFF:
+
+            #Enables moisture alert
+            MQTT_Firebase.postAlertToFirebase(Broker_ID,m_in[CONSTANT.MONITORING_MOD_DEVICE],m_in[CONSTANT.MONITORING_MOD_SENSOR_TYPE],CONSTANT.ON)      
+            
+            #check and enable irrigation
+            irrigationState = MQTT_Firebase.getModuleOutputStatus(CONSTANT.BROKER_ID,m_in[CONSTANT.MONITORING_MOD_DEVICE])
+            if irrigationState['Irrigation']['State'] == CONSTANT.OFF:
                 #TURN ON THE IRRIGATION
                 MQTT_Firebase.setOutputOnFirebase(Broker_ID, m_in[CONSTANT.MONITORING_MOD_DEVICE], CONSTANT.F_ACTUATOR_FAN,CONSTANT.ON)
-        else: #m_in["Value"] <= MQTT_Firebase.moistThreshold.high:
-            #TURN OFF TEMPERATURE ALERT
+        else:
+            #Disables moisture alert
             MQTT_Firebase.postAlertToFirebase(Broker_ID,m_in[CONSTANT.MONITORING_MOD_DEVICE],m_in[CONSTANT.MONITORING_MOD_SENSOR_TYPE],CONSTANT.OFF)
-            if MQTT_Firebase.irrigation.state == CONSTANT.ON and MQTT_Firebase.fan.userAction == CONSTANT.OFF:
+
+            irrigationState = MQTT_Firebase.getModuleOutputStatus(CONSTANT.BROKER_ID,m_in[CONSTANT.MONITORING_MOD_DEVICE])
+            if irrigationState['Irrigation']['State'] == CONSTANT.ON and irrigationState['Irrigation']['UserAction'] == CONSTANT.OFF:
                 #TURN OFF THE IRRIGATION
                 MQTT_Firebase.setOutputOnFirebase(Broker_ID,m_in[CONSTANT.MONITORING_MOD_DEVICE],CONSTANT.F_ACTUATOR_FAN,CONSTANT.OFF)
 
@@ -63,9 +81,9 @@ try:
     def on_message(client, userdata, message):
         #print(client)
         #print(userdata)
-        print("message received: ",str(message.payload.decode("utf-8","ignore"))) 
+        #print("message received: ",str(message.payload.decode("utf-8","ignore"))) 
         time.sleep(1)
-        parseMessage(message.payload.decode("utf-8"))
+        messageDispatcher(message.payload.decode("utf-8"))
 
     client= paho.Client(Broker_ID)
     client.on_message=on_message

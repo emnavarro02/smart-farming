@@ -1,0 +1,10 @@
+*.pyc
+RPi/scripts/MQTT_Firebase.pyc
+RPi/mqtt/sub/FirebaseAlert.pyc
+RPi/mqtt/sub/FirebaseOutput.pyc
+RPi/mqtt/sub/FirebaseThreshold.pyc
+RPi/mqtt/sub/MQTT_Firebase.pyc
+RPi/mqtt/sub/MQTT_OSInfo.pyc
+RPi/mqtt/sub/MQTT_password_retrieval.pyc
+*.pyc
+*.pyc

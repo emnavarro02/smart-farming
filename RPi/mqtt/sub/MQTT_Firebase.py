@@ -56,28 +56,32 @@ def postMessageToFirebase(broker,module,sensorType,data):
     #print (r)
 
 def stream_handler(message):
-    # print(message)
     # First check if the message is about threshold or some module
     # if it's about a threshold, put the value on the right key
-    
-    # path = str(message["path"]) 
-    if message["path"] == "/Moisture/High":
-        moistThreshold.high = message["data"]
-        print("The MAX threshold for " + str(moistThreshold.name) + " is now " + str(moistThreshold.high))
-    elif message["path"] == "/Moisture/Low":
-        moistThreshold.low = message["data"]
-        print("The MIN threshold for " + str(moistThreshold.name) + " is now " + str(moistThreshold.low))
-    elif message["path"] == "/Temperature/High":
-        tempThreshold.high = message["data"]
-        print("The MAX threshold for " + str(tempThreshold.name) + " is now " + str(tempThreshold.high))
-    elif message["path"] == "/Temperature/Low":
-        tempThreshold.low = message["data"]
-        print("The MIN threshold for " + str(tempThreshold.name) + " is now " + str(tempThreshold.low))
+
+    path = str(message["path"]).split("/")
+
+    if len(path) >= 3:
+        if message["path"] == "/Moisture/High":
+            moistThreshold.high = message["data"]
+            print("The MAX threshold for " + str(moistThreshold.name) + " is now " + str(moistThreshold.high))
+        elif message["path"] == "/Moisture/Low":
+            moistThreshold.low = message["data"]
+            print("The MIN threshold for " + str(moistThreshold.name) + " is now " + str(moistThreshold.low))
+        elif message["path"] == "/Temperature/High":
+            tempThreshold.high = message["data"]
+            print("The MAX threshold for " + str(tempThreshold.name) + " is now " + str(tempThreshold.high))
+        elif message["path"] == "/Temperature/Low":
+            tempThreshold.low = message["data"]
+            print("The MIN threshold for " + str(tempThreshold.name) + " is now " + str(tempThreshold.low))
+        else:
+            if path[4] == "UserAction":
+                print("User changed value of " + path[3] + " for " + path[1] + ". System status is now: " + str(message["data"]))
 
 # Start a listerner that handles the Threshold node
 def startListener(broker):
-    listener = db.child(broker).child(CONSTANT.F_THRESHOLD).stream(stream_handler)
-
+    db.child(broker).child(CONSTANT.F_THRESHOLD).stream(stream_handler, stream_id="Threshold")
+    db.child(broker).child(CONSTANT.F_DEVICES_STATUS).stream(stream_handler, stream_id="Status")
 
 ###DUMMY DATA TO TEST POST ON FIREBASE
 # BROKER_ID = CONSTANT.BROKER_ID
@@ -89,15 +93,6 @@ def startListener(broker):
 # t = getTresholdsFromFirebase(BROKER_ID, SENSOR_TYPE)
 # print (getTresholdsFromFirebase(BROKER_ID, SENSOR_TYPE)["High"])
 
-'''
-#Handle the alerts state
-moistAlert = FirebaseAlert(CONSTANT.F_ALERT_MOISTURE,0)
-tempAlert = FirebaseAlert(CONSTANT.F_ALERT_TEMPERATURE,0)
-
-#Handle output state
-fan = FirebaseOutput(CONSTANT.F_ACTUATOR_FAN,0,0)
-irrigation = FirebaseOutput(CONSTANT.F_ACTUATOR_IRRIGATION,0,0)
-'''
 
 #Handle treshold value
 current_threshold = getTresholdsFromFirebase(CONSTANT.BROKER_ID, "Moisture")
@@ -105,11 +100,4 @@ moistThreshold = FirebaseThreshold("Moisture",current_threshold["High"],current_
 current_threshold = getTresholdsFromFirebase(CONSTANT.BROKER_ID, "Temperature")
 tempThreshold = FirebaseThreshold("Temperature",current_threshold["High"],current_threshold["Low"])
 
-#startListener(CONSTANT.BROKER_ID)
-
-'''
-myAlerts = db.child("BROKER-01").child("00:00:CF:DB").child(CONSTANT.F_ALERTS).stream(stream_handler)
-myOutputs = db.child("BROKER-01").child("00:00:CF:DB").child("Outputs").stream(stream_handler)
-myTresholdStream = db.child("BROKER-01").child("Threshold").stream(stream_handler)
-myAlerts = db.child("BROKER-01").child("00:00:CF:DB").child("Inputs").stream(stream_handler)
-'''
+startListener(CONSTANT.BROKER_ID)

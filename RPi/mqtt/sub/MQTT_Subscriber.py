@@ -28,6 +28,10 @@ def messageDispatcher(message):
     m_in = json.loads(m_decode)
 
     data = {'Value':m_in[CONSTANT.MONITORING_MOD_VALUE],'TimeStamp': str(datetime.datetime.utcnow())}
+    print("...............................\n")
+    print("Sending message to firebase:")
+    print(data)
+    print("...............................\n")
     MQTT_Firebase.postMessageToFirebase(Broker_ID, m_in[CONSTANT.MONITORING_MOD_DEVICE], m_in[CONSTANT.MONITORING_MOD_SENSOR_TYPE],data)
 
     if m_in[CONSTANT.MONITORING_MOD_SENSOR_TYPE] == "Temperature":
@@ -47,7 +51,6 @@ def messageDispatcher(message):
             #Disables temperature alert
             MQTT_Firebase.postAlertToFirebase(Broker_ID,m_in[CONSTANT.MONITORING_MOD_DEVICE],m_in[CONSTANT.MONITORING_MOD_SENSOR_TYPE],CONSTANT.OFF)
             
-            #fanState = MQTT_Firebase.getModuleAlertForSensor(CONSTANT.BROKER_ID, m_in[CONSTANT.MONITORING_MOD_DEVICE],"Temperature")
             fanStatus = MQTT_Firebase.getModuleOutputStatus(CONSTANT.BROKER_ID,m_in[CONSTANT.MONITORING_MOD_DEVICE])
             #print ("Fan status: " + str(fanStatus))
             #print ("State of FAN: " + str(fanStatus['Fan']['State']))
@@ -81,7 +84,8 @@ try:
     def on_message(client, userdata, message):
         #print(client)
         #print(userdata)
-        #print("message received: ",str(message.payload.decode("utf-8","ignore"))) 
+
+        print("message received: ",str(message.payload.decode("utf-8","ignore"))) 
         time.sleep(1)
         messageDispatcher(message.payload.decode("utf-8"))
 

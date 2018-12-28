@@ -181,7 +181,8 @@ void setup(){
     Serial.println("Connecting to MQTT...");
     if (mqttClient.connect(clientID, mqtt_user, mqtt_password)){
       Serial.println("Connected");
-      mqttClient.subscribe("5C:CF:7F:30:10:CD/pin/set");
+      //clientID + "/inbox"
+      mqttClient.subscribe("5C:CF:7F:30:10:CD/inbox");
     } else {
       Serial.print("failed with state ");
       Serial.print(mqttClient.state());
@@ -233,22 +234,10 @@ void loop(){
   
   TTL();
   
-  delay(100);
+  delay(5000);
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
-  /*
-  Serial.print("Message arrived in topic: ");
-  Serial.println(topic);
-
-  Serial.print("Message:");
-  for (int i = 0; i < length; i++) {
-    Serial.print((char)payload[i]);
-  }
- 
-  Serial.println();
-  Serial.println("-----------------------"); 
-  */
   
   char json[length + 1];
   strncpy (json, (char*)payload, length);
@@ -273,19 +262,35 @@ void callback(char* topic, byte* payload, unsigned int length) {
   String methodName = String((const char*)data["method"]);
   if (methodName.equals("GET")){
     // Reply with GPIO status
-    //String responseTopic = String(topic);
-    //responseTopic.replace("request", "response");
-    //mqttClient.publish(responseTopic.c_str(), get_gpio_status().c_str());
+    String responseTopic = "outbox/pin";
+   
+    mqttClient.publish(responseTopic.c_str(), get_gpio_status().c_str());
+
   }else if (methodName.equals("SET")){
     // Update GPIO status and reply
     set_gpio_status(data["params"]["pin"], data["params"]["enabled"]);
     
-    
     //String responseTopic = String(topic);
-    //responseTopic.replace("request", "response");
-    //client.publish(responseTopic.c_str(), get_gpio_status().c_str());
-    //client.publish("v1/devices/me/attributes", get_gpio_status().c_str());
+    //responseTopic.replace("inbox", "outbox");
+     String responseTopic = "outbox/pin";
+     Serial.println(responseTopic.c_str());
+    mqttClient.publish(responseTopic.c_str(), get_gpio_status().c_str());
   }
+}
+
+String get_gpio_status() {
+  // Prepare gpios JSON payload string
+  StaticJsonBuffer<200> jsonBuffer;
+  JsonObject& data = jsonBuffer.createObject();
+  data["Device"] = clientID;
+  data["Fan"] = gpioState[0] ? true : false;
+  data["Irrigation"] = gpioState[1] ? true : false;
+  char payload[256];
+  data.printTo(payload, sizeof(payload));
+  String strPayload = String(payload);
+  Serial.print("Get gpio status: ");
+  Serial.println(strPayload);
+  return strPayload;
 }
 
 void set_gpio_status(int pin, boolean enabled) {

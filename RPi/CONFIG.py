@@ -1,0 +1,1 @@
+config = {"apiKey": "AIzaSyBfA9oYJI7BlnQ3jiJXajWyIkX_ZCjcaN0","authDomain": "smartgarden-fe7b3.firebaseapp.com","databaseURL": "https://smartgarden-fe7b3.firebaseio.com","storageBucket": "smartgarden-fe7b3.appspot.com"}

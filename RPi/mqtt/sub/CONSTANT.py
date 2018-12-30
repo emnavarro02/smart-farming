@@ -1,5 +1,6 @@
 BROKER_ID = "BROKER-01"
-MQTT_SERVER = "192.168.137.12" # RPi over Windows Hotspot
+#MQTT_SERVER = "192.168.137.12" # RPi over Windows Hotspot
+MQTT_SERVER = "test.mosquitto.org"
 MQTT_USER = "mqttuser"
 MQTT_SUB_NAME = "PYTHON-SUB"
 MQTT_TOPIC = "monitoring_data"

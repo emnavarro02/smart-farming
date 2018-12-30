@@ -11,6 +11,7 @@ import time
 import datetime
 import paho.mqtt.client as paho
 import CONSTANT
+import PIN
 from MQTT_password_retrieval import get_pass
 #from MQTT_OSInfo import get_lan_ip, get_os_name
 import MQTT_Firebase
@@ -22,10 +23,20 @@ Broker_ID = CONSTANT.BROKER_ID
 
 MQTT_Firebase.startListener(CONSTANT.BROKER_ID)
 
+def sendCommandToEsp(module, outputType, method, status):
+    if outputType == "Irrigation":
+        pin = PIN.IRRIGATION
+    elif outputType == "Fan":
+        pin = PIN.FAN
+    
+    strTopic = module + "/inbox/" 
+    strMessage = {"method" : method ,"params" : {"pin" : pin ,"enabled": status}}
+    client.publish(strTopic, strMessage)
+
 def messageDispatcher(message):
     
     m_decode = str(message)
-    m_in = json.loads(m_decode)
+    m_in = json.loads(m_decode) 
 
     data = {'Value':m_in[CONSTANT.MONITORING_MOD_VALUE],'TimeStamp': str(datetime.datetime.utcnow())}
     print("...............................\n")
@@ -79,14 +90,12 @@ def messageDispatcher(message):
                 #TURN OFF THE IRRIGATION
                 MQTT_Firebase.setOutputOnFirebase(Broker_ID,m_in[CONSTANT.MONITORING_MOD_DEVICE],CONSTANT.F_ACTUATOR_FAN,CONSTANT.OFF)
 
-
 try:
     def on_message(client, userdata, message):
-        #print(client)
-        #print(userdata)
 
         print("message received: ",str(message.payload.decode("utf-8","ignore"))) 
         time.sleep(1)
+
         messageDispatcher(message.payload.decode("utf-8"))
 
     client= paho.Client(Broker_ID)

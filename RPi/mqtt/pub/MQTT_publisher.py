@@ -3,7 +3,7 @@ import paho.mqtt.client as paho
 import os
 import time
 
-broker="192.168.137.12"
+broker="test.mosquitto.org"
 oldTemp = ""
 
 ### CONNECTING TO MQTT BROKER
@@ -22,6 +22,6 @@ while True:
         #print(newTemp)
         oldTemp = newTemp
         print("Temperature has changed. New Temperature is: ", newTemp.rstrip())
-        publish(topic, payload=None, qos=0, retain=False)
+        #publish(topic, payload=None, qos=0, retain=False)
         client.publish("monitoring_data", newTemp.rstrip(),qos=1) #publish
         time.sleep(4)

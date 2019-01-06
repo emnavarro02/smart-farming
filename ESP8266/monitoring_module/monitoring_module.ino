@@ -1,19 +1,17 @@
-/*  File:     monitoring_module_int.ino
+/*  File:     monitoring_module_v2.ino
  *  Author:   Navarro, Emerson
  *  Created:  12-DEC-2018
+ *  Changed:  14-DEC-2018
  *  
  *  .DESCRIPTION
  *   This implements a WebServer on ESP8266. If the ESP it's not able to connect to any wireless at
  *   the first time, an access point connection named "SF-Config" will be created to permit setup the
  *   wireless connection desired. 
  *     
- *  .FUNCTIONS
- *   Loop()
- *   Setup()
- *   saveConfigCallback()
- *   void sendTemperature()
- *   void sendMoistureLevel()
- *   void publishOnMQTT(DynamicJsonBuffer JSONmessageBuffer)
+ *  .CHANGE LOG
+ *  14-DEC-2018: reduced delay time to avoid timout. Performe some aditional cosmetic changes and 
+ *               optimizations
+ *               
  */  
 
 #include <FS.h>
@@ -26,23 +24,26 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
+#define WiFiReset false
+
 /**************************************** Variable declarations ***************************************/
 
 // Assign  variables to be used to connect on MQTT_Broker
 char mqtt_server[40] = "192.168.10.1";
 char mqtt_port[5] = "1883";
-const char* mqtt_topic = "monitoring_data";
 char mqtt_user[40] = "mqttuser"; 
 char mqtt_password [40] = "mqttpwd";
+
 char* clientID = "5C:CF:7F:30:10:CD";
+const char* mqtt_topic = "monitoring_data";
 
 //initial value of sensor
-int moisture_sensor_value = 0;
-float one_wire_temperature = 0;
+int current_moisture = 0;
+float current_temperature = 0;
 
 //define pins to be used 
-const int DRY = 16;
-const int WET = 5;
+const int FAN = 16;
+const int IRRIGATION = 5;
 const int MOISTURE_SENSOR = 0;
 const int ONE_WIRE_BUS = 2;
 
@@ -63,7 +64,7 @@ void saveConfigCallback () {
 
 //Creates a client to the MQTT broker
 WiFiClient wifiClient;
-PubSubClient mqttClient(mqtt_server, atoi(mqtt_port), wifiClient); //atoi = ASCII to int
+PubSubClient mqttClient(wifiClient);
 
 // Setup a oneWire instance to communicate with any OneWire devices
 OneWire oneWire(ONE_WIRE_BUS);
@@ -71,16 +72,17 @@ OneWire oneWire(ONE_WIRE_BUS);
 // Pass our oneWire reference to Dallas Temperature. 
 DallasTemperature sensors(&oneWire);
 
+  // We assume that all GPIOs are LOW
+boolean gpioState[] = {false, false};
 
 /*********************** Initial Setup ***********************/
 void setup(){
   Serial.begin(115200);
 
   //clean FS, for testing
-  SPIFFS.format();
+  //SPIFFS.format();
 
   //*** read configuration from FS json ***/
-  
   Serial.println("mounting FS...");
 
   if (SPIFFS.begin()) {
@@ -139,8 +141,10 @@ void setup(){
   wifiManager.addParameter(&custom_mqtt_password);
 
   // Uncomment and run it once, if you want to erase all the stored information
-  //wifiManager.resetSettings();
-
+  if (WiFiReset == true){
+    wifiManager.resetSettings();
+  }
+  
   wifiManager.autoConnect("SF-Config");
   Serial.println("Connected.");
 
@@ -170,32 +174,196 @@ void setup(){
     //end save
   }
 
+  mqttClient.setServer(mqtt_server, atoi(mqtt_port)); //atoi = ASCII to int
+  mqttClient.setCallback(callback);
+
+  while (!mqttClient.connected()){
+    Serial.println("Connecting to MQTT...");
+    if (mqttClient.connect(clientID, mqtt_user, mqtt_password)){
+      Serial.println("Connected");
+      //clientID + "/inbox"
+      mqttClient.subscribe("5C:CF:7F:30:10:CD/inbox");
+    } else {
+      Serial.print("failed with state ");
+      Serial.print(mqttClient.state());
+      delay(2000);
+    }
+  }
+ 
+  // Initialize inputs / output
+  pinMode(IRRIGATION, OUTPUT);
+  pinMode(FAN, OUTPUT);
+  digitalWrite(IRRIGATION, LOW);
+  digitalWrite(FAN, LOW);
+  
   // Start up the DallasTemperature library
   sensors.begin();
-  
-  // Initialize inputs / output
-  pinMode(DRY, OUTPUT);
-  pinMode(WET, OUTPUT);
-  digitalWrite(DRY, HIGH);
 
-  if (mqttClient.connect(clientID, mqtt_user, mqtt_password)){
-    Serial.println("\nConnected to MQTT Broker.");
-  }
-  else {
-    Serial.println("\nConnection to MQTT Broker failed...");
-  }
-
- server.begin();
+  //Start WebServerAP
+  server.begin();
 }
 
 void loop(){
-
+  
   // Setup the web page which is accessible through the IP address of the NodeMCU
-  // When the web page is accessd the "client" value changes to "1" and the Lopp() functions pauses   
-  WiFiClient client = server.available();   // Listen for incoming clients
+  // When the web page is accessd the "client" value changes to "1" and the Loop() functions pauses   
+  InitWebServer();
 
-  //If someone connects to the ESP Web Page... 
-  if (client) {                             // If a new client connects,
+  mqttClient.loop();
+  
+  int new_temperature = 0;
+  int new_moisture = 0;
+
+  new_temperature = requestTemperature();
+  if (new_temperature != current_temperature){
+    current_temperature = new_temperature;
+    Serial.println("");
+    Serial.print ("[TEMPERATURE]: ");
+    Serial.println(current_temperature);
+    messageDispatcher("Temperature",current_temperature);
+  }
+
+  new_moisture = requestMoisture();
+  if (new_moisture != current_moisture){
+    current_moisture = new_moisture;
+    Serial.println("");
+    Serial.print ("[MOISTURE]: ");
+    Serial.println(current_moisture);
+    messageDispatcher("Moisture",current_moisture);
+  }
+  
+  TTL();
+  
+  delay(5000);
+}
+
+void callback(char* topic, byte* payload, unsigned int length) {
+  
+  char json[length + 1];
+  strncpy (json, (char*)payload, length);
+  json[length] = '\0';
+
+  Serial.print("Topic: ");
+  Serial.println(topic);
+  Serial.print("Message: ");
+  Serial.println(json);
+
+  // Decode JSON request
+  StaticJsonBuffer<200> jsonBuffer;
+  JsonObject& data = jsonBuffer.parseObject((char*)json);
+
+  if (!data.success())
+  {
+    Serial.println("parseObject() failed");
+    return;
+  }
+  
+  // Check request method
+  String methodName = String((const char*)data["method"]);
+  if (methodName.equals("GET")){
+    // Reply with GPIO status
+    String responseTopic = "outbox/pin";
+   
+    mqttClient.publish(responseTopic.c_str(), get_gpio_status().c_str());
+
+  }else if (methodName.equals("SET")){
+    // Update GPIO status and reply
+    set_gpio_status(data["params"]["pin"], data["params"]["enabled"]);
+    
+    //String responseTopic = String(topic);
+    //responseTopic.replace("inbox", "outbox");
+     String responseTopic = "outbox/pin";
+     Serial.println(responseTopic.c_str());
+    mqttClient.publish(responseTopic.c_str(), get_gpio_status().c_str());
+  }
+}
+
+String get_gpio_status() {
+  // Prepare gpios JSON payload string
+  StaticJsonBuffer<200> jsonBuffer;
+  JsonObject& data = jsonBuffer.createObject();
+  data["Device"] = clientID;
+  data["Fan"] = gpioState[0] ? true : false;
+  data["Irrigation"] = gpioState[1] ? true : false;
+  char payload[256];
+  data.printTo(payload, sizeof(payload));
+  String strPayload = String(payload);
+  Serial.print("Get gpio status: ");
+  Serial.println(strPayload);
+  return strPayload;
+}
+
+void set_gpio_status(int pin, boolean enabled) {
+  if (pin == FAN) {
+    // Output GPIOs state
+    digitalWrite(FAN, enabled ? HIGH : LOW);
+    // Update GPIOs state
+    gpioState[0] = enabled;
+  } else if (pin == IRRIGATION) {
+    // Output GPIOs state
+    digitalWrite(IRRIGATION, enabled ? HIGH : LOW);
+    // Update GPIOs state
+    gpioState[1] = enabled;
+  }
+}
+
+void messageDispatcher(String sensorType, float value){
+  DynamicJsonBuffer MesssageJSONBuffer;
+  JsonObject& JSONEncoder = MesssageJSONBuffer.createObject();
+  
+  JSONEncoder["Device"] = clientID;
+  JSONEncoder["SensorType"] = sensorType;
+  JSONEncoder["Value"] = value;
+  
+  char JSONmessageBuffer[100];
+  JSONEncoder.printTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
+
+  publishOnMQTT(JSONmessageBuffer);
+}
+
+void publishOnMQTT(char* JSONmessageBuffer){
+  // PUBLISH to the MQTT Broker (topic = mqtt_topic, defined at the beginning)
+    
+  while (!mqttClient.publish(mqtt_topic, JSONmessageBuffer, 1)){
+    Serial.println("[ERROR] Message could not be sent. Attempting to reconnect and trying again");
+    reconnect_mqtt();
+    mqttClient.publish(mqtt_topic, JSONmessageBuffer, 1);
+  }
+  Serial.println("Message published."); 
+}
+
+void TTL(){
+    mqttClient.publish("Devices/TTL", "ACK");
+    Serial.print(".");
+}
+
+void reconnect_mqtt(){
+    if (!mqttClient.connected()){
+    Serial.println("Client not connected. Trying to reconnect.");
+    while (!mqttClient.connected()){
+      Serial.print(".");
+      mqttClient.connect(clientID, mqtt_user, mqtt_password);
+    }
+  }
+}
+
+float requestTemperature(){
+  // Command to get temperatures
+  sensors.requestTemperatures(); 
+  delay(100);
+  return sensors.getTempCByIndex(0);
+}
+
+int requestMoisture(){
+   return (analogRead(MOISTURE_SENSOR) / 10);
+}
+
+void InitWebServer(){
+  WiFiClient client = server.available();   // Listen for incoming clients
+  
+  if (client) {
+    //If someone connects to the ESP Web Page... 
+                                            // If a new client connects,
     Serial.println("New Client.");          // print a message out in the serial port
     String currentLine = "";                // make a String to hold incoming data from the client
     while (client.connected()) {            // loop while the client's connected
@@ -246,82 +414,6 @@ void loop(){
     client.stop();
     Serial.println("Client disconnected.");
     Serial.println("");
-  }
   //End of the connection handler
- 
-  // Send the command to get temperatures
-  sensors.requestTemperatures(); 
-  if (sensors.getTempCByIndex(0) != one_wire_temperature){
-     Serial.println("Temperature changed");
-     one_wire_temperature = sensors.getTempCByIndex(0);
-     sendTemperature();
   }
-
-  moisture_sensor_value = analogRead(MOISTURE_SENSOR);
-  moisture_sensor_value = moisture_sensor_value/10;
-  
-  //converts value to char*
-  char strValue[10];
-  sprintf(strValue, "%d", moisture_sensor_value);
-  //Serial.println(moisture_sensor_value);
-  
-  if(moisture_sensor_value<80){
-    digitalWrite(WET, HIGH);
-  }
-  else{
-    digitalWrite(DRY, HIGH);
-  }
-  
-  delay(10000);
-  digitalWrite(WET,LOW);
-  digitalWrite(DRY, LOW);
-
- sendMoistureLevel();  
-}
-
-void sendMoistureLevel(){
- DynamicJsonBuffer MesssageJSONBuffer;
- JsonObject& JSONEncoder = MesssageJSONBuffer.createObject();
- JSONEncoder["device"] = clientID;
- JSONEncoder["sensorType"] = "Moisture";
- JSONEncoder["value"] = moisture_sensor_value;
- 
- char JSONmessageBuffer[100];
- JSONEncoder.printTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
- 
- Serial.print("MOISTURE LEVEL: ");
- Serial.println(JSONmessageBuffer);
- //JSONEncoder.prettyPrintTo(Serial);
- 
- publishOnMQTT(JSONmessageBuffer);
-}
-
-void sendTemperature(){
-  DynamicJsonBuffer MesssageJSONBuffer;
-  JsonObject& JSONEncoder = MesssageJSONBuffer.createObject();
-  JSONEncoder["device"] = clientID;
-  JSONEncoder["sensorType"] = "Temperature";
-  JSONEncoder["value"] = one_wire_temperature;
-  
-  char JSONmessageBuffer[100];
-  JSONEncoder.printTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
-  
-  Serial.print("TEMPERATURE: ");
-  Serial.println(JSONmessageBuffer); 
-  //JSONEncoder.prettyPrintTo(Serial);
-
-  publishOnMQTT(JSONmessageBuffer);
-}
-
-void publishOnMQTT(char* JSONmessageBuffer){
-  // PUBLISH to the MQTT Broker (topic = mqtt_topic, defined at the beginning)
-  if (mqttClient.publish(mqtt_topic, JSONmessageBuffer, 1) ){
-    Serial.println("Value sent to Mqtt");
-  }
-  else{
-    Serial.println("Message failed to send. Reconnecting to MQTT Broker and trying again");
-    mqttClient.connect(clientID, mqtt_user, mqtt_password);
-    delay(10);
-    mqttClient.publish(mqtt_topic, JSONmessageBuffer, 1);
-  } 
 }

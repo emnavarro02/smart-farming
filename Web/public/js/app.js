@@ -56,6 +56,8 @@
     const dbOutputObject = firebase.database().ref().child('BROKER-01').child('DevicesStatus').child("5C:CF:7F:30:10:CD").child("Outputs");
     const dbAlertsObject = firebase.database().ref().child('BROKER-01').child('DevicesStatus').child("5C:CF:7F:30:10:CD").child("Alerts");
     const dbCurrentValueObject = firebase.database().ref().child('BROKER-01').child('DevicesStatus').child("5C:CF:7F:30:10:CD").child("CurrentValues");
+    const dbBrokerStatus = firebase.database().ref().child('BROKER-01').child('BrokerStatus')
+
 
     dbCurrentValueObject.on('value', val => {
         currentValue = JSON.parse(JSON.stringify(val.val(), null, 3));
@@ -66,6 +68,19 @@
         //document.getElementById('dashboard-moisture').innerText  = currentValue.Moisture.Value
         document.getElementById('dashboard-moisture').innerHTML  = currentValue.Moisture.Value + "<span style='font-size:.5em;vertical-align:super;'>&percnt;</span>"
 
+    });
+
+    dbBrokerStatus.on('value', brokerStatus => {
+        currentValue = JSON.parse(JSON.stringify(brokerStatus.val(), null, 3));
+        if (currentValue.ON){
+            document.getElementById('broker-status-message').innerHTML = "On"
+            document.getElementById("status-display").style.backgroundColor = "green";
+        }
+        else{
+            document.getElementById('broker-status-message').innerHTML = "Off"
+            document.getElementById("status-display").style.backgroundColor = "gray";
+        }
+        document.getElementById('broker-id').innerHTML = currentValue.BrokerID
     });
 
     dbRefObject.on('value', snap => {
@@ -143,23 +158,19 @@
         
 
         if (alertStatus.Temperature == 1) {
-            console.log("first IF");
             document.getElementById("temperature-display").style.backgroundColor = "red";
             document.getElementById("icon-temperature").innerHTML = "<i class='fas fa-exclamation-triangle'></i>";
 
         } else {
-            console.log("first ELSE");
             document.getElementById("temperature-display").style.backgroundColor = "lightblue";
             document.getElementById("icon-moisture").innerHTML = "<i class='fas fa-temperature-low'></i>"
         }
         
 
         if (alertStatus.Moisture == 1) {
-            console.log("2nd IF");
             document.getElementById("moisture-display").style.backgroundColor = "red";
             document.getElementById("icon-moisture").innerHTML = "<i class='fas fa-exclamation-triangle'></i>";
         } else {
-            console.log("2nd ELSE");
             document.getElementById("moisture-display").style.backgroundColor = "lightblue";
             document.getElementById("icon-moisture").innerHTML = "<i class='fas fa-tint'></i>";
         }

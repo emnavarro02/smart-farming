@@ -1,2 +1,0 @@
-IRRIGATION = 5
-FAN = 16

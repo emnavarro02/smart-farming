@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 """
    File name: MQTT_subscriber.py
    Author: Emerson Navarro
@@ -9,6 +8,7 @@
 """
 import time
 import datetime
+import sys
 import paho.mqtt.client as paho
 import CONSTANT
 import PIN
@@ -19,6 +19,8 @@ from FirebaseAlert import FirebaseAlert
 from FirebaseOutput import FirebaseOutput
 from FirebaseThreshold import FirebaseThreshold
 from MQTT_password_retrieval import get_pass
+
+IS_BROKER_ON = False
 
 MQTT_password = get_pass() #retrives MQTT broker password securely
 broker = CONSTANT.MQTT_SERVER #get_lan_ip()
@@ -45,8 +47,6 @@ def getModuleOutputStatus(broker,module):
     return status
 
 def postAlertToFirebase(broker,module,alertType,value):
-    #alert: Temperature or Moisture
-    #value: 0 or 1
     db.child(broker).child(CONSTANT.F_DEVICES_STATUS).child(module).child(CONSTANT.F_ALERTS).update({alertType : value})
 
 def replyOutputStatus(broker, module, outputType, enabled):
@@ -62,6 +62,12 @@ def getTresholdsFromFirebase(broker, thresholdType):
     for limit in limits.each():
         threshold[limit.key()] = limit.val()
     return threshold
+
+def getFirebaseBrokerOnOff(broker):
+    return db.child(broker).child("BrokerStatus").child("ON").get().val()
+
+def setFirebaseBrokerOnOff(broker,value):
+    return db.child(broker).child("BrokerStatus").child("ON").set(value)
 
 def sendCommandToEsp(module, outputType, method, status):
     pin = 0
@@ -92,7 +98,7 @@ def messageDispatcher(message):
         replyOutputStatus(Broker_ID, m_in['Device'], 'Fan', int(m_in['Fan']))
         time.sleep(2)
         replyOutputStatus(Broker_ID, m_in['Device'], 'Irrigation', int(m_in['Irrigation']))
-    else:
+    elif (message.topic == 'monitoring_data'):
         data = {'Value':m_in["Value"],'TimeStamp': str(datetime.datetime.utcnow())}
         print("...............................\n")
         print("Sending message to firebase:")
@@ -101,7 +107,7 @@ def messageDispatcher(message):
         postMessageToFirebase(Broker_ID, m_in["Device"], m_in["SensorType"],data)
         if m_in["SensorType"] == "Temperature":
             if m_in["Value"] > tempThreshold.high:
-
+                print("\n Too warm. Enabling ventilation...")
                 #Enables a temperature alert
                 postAlertToFirebase(Broker_ID, m_in["Device"], m_in["SensorType"], CONSTANT.ON)
                 
@@ -122,21 +128,19 @@ def messageDispatcher(message):
                     setOutputOnFirebase(Broker_ID,m_in["Device"],CONSTANT.F_ACTUATOR_FAN,CONSTANT.OFF)
         
         elif m_in["SensorType"] == "Moisture":
-            print ("Current Moisture: " + str(m_in["Value"]))
-            print ("Max Moisture Threshold: " + str(moistThreshold.high))
-            print ("Min Moisture Threshold: " + str(moistThreshold.low)) 
-            if m_in["Value"] > moistThreshold.high:
-
-                print("\n Too dry. Enabling Irrigation...")
+            if m_in["Value"] < moistThreshold.low or m_in["Value"] > moistThreshold.high:
                 #Enables moisture alert
                 postAlertToFirebase(Broker_ID, m_in["Device"], m_in["SensorType"], CONSTANT.ON)      
                 
-                #check and enable irrigation
-                irrigationStatus = getModuleOutputStatus(CONSTANT.BROKER_ID,m_in["Device"])
-                print("IRRIGATION STATUS: " + str(irrigationStatus))
-                if irrigationStatus['Irrigation']['Status'] == CONSTANT.OFF:
-                    #TURN ON THE IRRIGATION
-                    setOutputOnFirebase(Broker_ID, m_in["Device"], CONSTANT.F_ACTUATOR_IRRIGATION,CONSTANT.ON)
+                if  m_in["Value"] < moistThreshold.low:
+                    print("\n Too dry. Enabling Irrigation...")
+
+                    #check and enable irrigation
+                    irrigationStatus = getModuleOutputStatus(CONSTANT.BROKER_ID,m_in["Device"])
+                    print("IRRIGATION STATUS: " + str(irrigationStatus))
+                    if irrigationStatus['Irrigation']['Status'] == CONSTANT.OFF:
+                        #TURN ON THE IRRIGATION
+                        setOutputOnFirebase(Broker_ID, m_in["Device"], CONSTANT.F_ACTUATOR_IRRIGATION,CONSTANT.ON)
             else:
                 #Disables moisture alert
                 postAlertToFirebase(Broker_ID,m_in["Device"],m_in["SensorType"],CONSTANT.OFF)
@@ -145,13 +149,12 @@ def messageDispatcher(message):
                 if irrigationStatus['Irrigation']['Status'] == CONSTANT.ON and irrigationStatus['Irrigation']['UserAction'] == CONSTANT.OFF:
                     #TURN OFF THE IRRIGATION
                     setOutputOnFirebase(Broker_ID,m_in["Device"],CONSTANT.F_ACTUATOR_IRRIGATION,CONSTANT.OFF)
- 
+
 def stream_handler(message):
-    print ("\n ......................................... \n NEW MESSAGE HAS BEEN ARRIVED:")
-   #print ("Topic:     " str(message.topic))
-    print ("Stream ID: " + str(message["stream_id"]))
-    print ("Path:      " + str(message['path']))
-    print ("Data:      " + str(message['data']))
+    print ("\n.........................................\n NEW MESSAGE HAS BEEN ARRIVED FROM FIREBASE:")
+    print (" Stream ID: " + str(message["stream_id"]))
+    print (" Path:      " + str(message['path']))
+    print (" Data:      " + str(message['data']))
     print (".........................................\n\n")
 
     if (str(message["stream_id"]) == "Output" and len(str(message['path'])) > 1 ):
@@ -159,24 +162,28 @@ def stream_handler(message):
         if(outputType[2] == "Outputs"):
             print ('Sending command to ESP: '+ str(outputType[1]) + '. SET the ' + str(outputType[3]) + ' system with the value ' + str(message['data']) )
             sendCommandToEsp(outputType[1],outputType[3],'SET',message['data'])
-            print("################################################")
+            print (".........................................\n")
     elif (str(message["stream_id"]) == "Threshold"):
-        print("TRESHOLD HAS BEEN DEFINED. NEW VALUES: ")
-        print('    Temperature High: ' + str(message['data']['Temperature']['High']))
-        print('    Temperature Low: ' + str(message['data']['Temperature']['Low']))
-        print('    Moisture High: ' + str(message['data']['Moisture']['High']))
-        print('    Moisture Low: ' + str(message['data']['Moisture']['Low']))
         tempThreshold.high = message['data']['Temperature']['High']
         tempThreshold.low = message['data']['Temperature']['Low']
         moistThreshold.high = message['data']['Moisture']['High']
         moistThreshold.low = message['data']['Moisture']['Low']
-       
+        print('\n.........................................\n TRESHOLD HAS BEEN DEFINED. NEW VALUES:')
+        print(' Temperature High: ' + str(tempThreshold.high))
+        print(' Temperature Low:  ' + str(tempThreshold.low))
+        print(' Moisture High:    ' + str(moistThreshold.high))
+        print(' Moisture Low:     ' + str(moistThreshold.low))
+        print('.........................................\n\n')
+    #elif (str(message["stream_id"]) == "BrokerStatus"):
+    #    IS_BROKER_ON = message["data"]
+     
 # Start a listerner that handles the Threshold node
 def startListener(broker):
     db.child(broker).child(CONSTANT.F_THRESHOLD).stream(stream_handler, stream_id="Threshold")
     db.child(broker).child(CONSTANT.F_DEVICES_STATUS).stream(stream_handler, stream_id="Output")
+    db.child(broker).child("BrokerStatus").stream(stream_handler, stream_id="BrokerStatus")
 
-#Handle treshold value
+# InitiazliHandle treshold value
 current_threshold = getTresholdsFromFirebase(CONSTANT.BROKER_ID, "Moisture")
 moistThreshold = FirebaseThreshold("Moisture",current_threshold["High"],current_threshold["Low"]) 
 current_threshold = getTresholdsFromFirebase(CONSTANT.BROKER_ID, "Temperature")
@@ -184,21 +191,33 @@ tempThreshold = FirebaseThreshold("Temperature",current_threshold["High"],curren
 
 startListener(CONSTANT.BROKER_ID)
 
-try:
-    def on_message(client, userdata, message):
-        print("message received: " + str(message.payload.decode("utf-8","ignore"))) 
+setFirebaseBrokerOnOff(CONSTANT.BROKER_ID, True)
+IS_BROKER_ON = getFirebaseBrokerOnOff(CONSTANT.BROKER_ID)
+
+while IS_BROKER_ON:
+    try:
+        def on_message(client, userdata, message):
+            print("message received: " + str(message.payload.decode("utf-8","ignore"))) 
+            time.sleep(1)
+            messageDispatcher(message)
+
+        client= paho.Client(Broker_ID)
+        client.on_message=on_message
+
+        print("connecting to broker ", broker)
+        client.username_pw_set(username=CONSTANT.MQTT_USER,password=MQTT_password)
+        client.connect(broker)
+        print("subscribing...")
+        client.subscribe("monitoring_data")
+        client.subscribe("outbox/pin")
+        client.loop_forever()
+    except KeyboardInterrupt:
+        print ("Now exiting...")
         time.sleep(1)
-        messageDispatcher(message)
-
-    client= paho.Client(Broker_ID)
-    client.on_message=on_message
-
-    print("connecting to broker ", broker)
-    client.username_pw_set(username=CONSTANT.MQTT_USER,password=MQTT_password)
-    client.connect(broker)
-    print("subscribing...")
-    client.subscribe("monitoring_data")
-    client.subscribe("outbox/pin")
-    client.loop_forever()
-except:
-    print("something went wrong")
+        setFirebaseBrokerOnOff(CONSTANT.BROKER_ID, False)
+        time.sleep(1)
+        sys.exit(0)
+    except:
+        print("[ERROR] It was not possible to connect to the MQTT Server. Check if it's started and accepting messages.")
+setFirebaseBrokerOnOff(CONSTANT.BROKER_ID, False)
+exit()

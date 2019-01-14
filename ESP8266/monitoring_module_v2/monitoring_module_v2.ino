@@ -26,6 +26,8 @@
 #include <DallasTemperature.h>
 
 #define WiFiReset false
+#define INTERVAL_TEMPERATURE 15000
+#define INTERVAL_MOISTURE 30000
 
 /**************************************** Variable declarations ***************************************/
 
@@ -35,8 +37,8 @@ char mqtt_port[5] = "1883";
 char mqtt_user[40] = "mqttuser"; 
 char mqtt_password [40] = "mqttpwd";
 
-char* clientID = "5C:CF:7F:30:10:CD";
-const char* mqtt_topic = "monitoring_data";
+char clientID[] = "5C:CF:7F:30:10:CD";
+//const char* mqtt_topic = "monitoring_data";
 
 //initial value of sensor
 int current_moisture = 0;
@@ -47,6 +49,9 @@ const int FAN = 16;
 const int IRRIGATION = 5;
 const int MOISTURE_SENSOR = 0;
 const int ONE_WIRE_BUS = 2;
+
+unsigned long time_1 = 0;
+unsigned long time_2 = 0;
 
 //Set web server
 WiFiServer server(80);
@@ -99,7 +104,7 @@ void setup(){
       if (configFile) {
         Serial.println("opened config file");
         size_t size = configFile.size();
-        Serial.println(configFile.size());
+ 
         // Allocate a buffer to store contents of the file.
         std::unique_ptr<char[]> buf(new char[size]);
         
@@ -182,12 +187,12 @@ void setup(){
     Serial.println("Connecting to MQTT...");
     if (mqttClient.connect(clientID, mqtt_user, mqtt_password)){
       Serial.println("Connected");
-      //clientID + "/inbox"
       mqttClient.subscribe("5C:CF:7F:30:10:CD/inbox");
+      delay(20);
     } else {
       Serial.print("failed with state ");
       Serial.print(mqttClient.state());
-      delay(2000);
+    
     }
   }
  
@@ -210,35 +215,47 @@ void loop(){
   // When the web page is accessd the "client" value changes to "1" and the Loop() functions pauses   
   InitWebServer();
 
+  if (!mqttClient.connected()){
+    Serial.println("Attempting to reconnect.");
+    reconnect_mqtt();
+  }
+  
   mqttClient.loop();
-  
-  int new_temperature = 0;
-  int new_moisture = 0;
+  delay (100);
+  //Serial.print(mqttClient.connected());
+  //Serial.println(mqttClient.state());
 
-  new_temperature = requestTemperature();
-  if (new_temperature != current_temperature){
-    current_temperature = new_temperature;
-    Serial.println("");
-    Serial.print ("[TEMPERATURE]: ");
-    Serial.println(current_temperature);
-    messageDispatcher("Temperature",current_temperature);
+  if (millis() > time_1 + INTERVAL_TEMPERATURE){
+      Serial.println("Checking for temperature...");
+      int new_temperature = 0;
+      new_temperature = requestTemperature();
+      time_1 = millis();
+      if (new_temperature != current_temperature){
+        current_temperature = new_temperature;
+        Serial.println("");
+        Serial.print ("[TEMPERATURE]: ");
+        Serial.println(current_temperature);
+        messageDispatcher("Temperature",current_temperature);
+      }  
   }
 
-  new_moisture = requestMoisture();
-  if (new_moisture != current_moisture){
-    current_moisture = new_moisture;
-    Serial.println("");
-    Serial.print ("[MOISTURE]: ");
-    Serial.println(current_moisture);
-    messageDispatcher("Moisture",current_moisture);
+  if (millis() > time_2 + INTERVAL_MOISTURE){
+    Serial.println("Checking for moisture...");
+    int new_moisture = 0;
+    new_moisture = requestMoisture();
+    time_2 = millis();
+    if (new_moisture != current_moisture){
+      current_moisture = new_moisture;
+      Serial.println("");
+      Serial.print ("[MOISTURE]: ");
+      Serial.println(current_moisture);
+      messageDispatcher("Moisture",current_moisture);
+    }
   }
-  
-  
-  delay(500);
-  TTL();
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
+  
   char json[length + 1];
   strncpy (json, (char*)payload, length);
   json[length] = '\0';
@@ -328,10 +345,10 @@ void messageDispatcher(String sensorType, float value){
 void publishOnMQTT(char* JSONmessageBuffer){
   // PUBLISH to the MQTT Broker (topic = mqtt_topic, defined at the beginning)
     
-  while (!mqttClient.publish(mqtt_topic, JSONmessageBuffer, 1)){
+  while (!mqttClient.publish("monitoring_data", JSONmessageBuffer)){
     Serial.println("[ERROR] Message could not be sent. Attempting to reconnect and trying again");
     reconnect_mqtt();
-    mqttClient.publish(mqtt_topic, JSONmessageBuffer, 1);
+    mqttClient.publish("monitoring_data", JSONmessageBuffer);
   }
   Serial.println("Message published.");
 }
@@ -347,6 +364,7 @@ void reconnect_mqtt(){
     while (!mqttClient.connected()){
       Serial.print(".");
       mqttClient.connect(clientID, mqtt_user, mqtt_password);
+      mqttClient.subscribe("5C:CF:7F:30:10:CD/inbox");
     }
   }
 }
@@ -354,7 +372,7 @@ void reconnect_mqtt(){
 float requestTemperature(){
   // Command to get temperatures
   sensors.requestTemperatures(); 
-  delay(100);
+  delay(10);
   return sensors.getTempCByIndex(0);
 }
 
@@ -390,6 +408,7 @@ void InitWebServer(){
             client.println("<!DOCTYPE html><html>");
             client.println("<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
             client.println("<link rel=\"icon\" href=\"data:,\">");
+            
             // CSS to style the on/off buttons 
             // Feel free to change the background-color and font-size attributes to fit your preferences
             client.println("<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}");

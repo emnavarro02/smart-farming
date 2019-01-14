@@ -1,13 +1,3 @@
 *.pyc
-RPi/scripts/MQTT_Firebase.pyc
-RPi/mqtt/sub/FirebaseAlert.pyc
-RPi/mqtt/sub/FirebaseOutput.pyc
-RPi/mqtt/sub/FirebaseThreshold.pyc
-RPi/mqtt/sub/MQTT_Firebase.pyc
-RPi/mqtt/sub/MQTT_OSInfo.pyc
-RPi/mqtt/sub/MQTT_password_retrieval.pyc
-*.pyc
-*.pyc
-RPi/Firebase_Streamdata.py
 RPi/mqtt/CONFIG.py
-RPi/mqtt/SmartFarm.py
+RPi/mqtt/smart-farming.bin

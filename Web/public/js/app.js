@@ -155,7 +155,6 @@
     dbAlertsObject.on('value' , alert => {
         var alertStatus = JSON.parse(JSON.stringify(alert.val(), null, 3));
 
-        
         if (alertStatus.Temperature == 1) {
             document.getElementById("temperature-display").style.backgroundColor = "red";
             document.getElementById("icon-temperature").innerHTML = "<i class='fas fa-exclamation-triangle'></i>";

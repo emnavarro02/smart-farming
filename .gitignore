@@ -1,3 +1,4 @@
+/grootfarm/
 *.pyc
 RPi/mqtt/CONFIG.py
 RPi/mqtt/smart-farming.bin

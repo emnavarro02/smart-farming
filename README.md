@@ -1,7 +1,8 @@
 # smart-farming
 Smart Farming project using Raspberry PI and NodeMCU (ESP8266)
 
-docker run -d -p 1883:1833/tcp
+docker build . -t coordinator:v1
+docker run -d -p 1883:1883/tcp coordinator:v1
 
 
 ### Windows Only:

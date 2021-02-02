@@ -1,5 +1,0 @@
-requests
-paho-mqtt
-cryptography 
-pyrebase4 
-google-auth-oauthlib

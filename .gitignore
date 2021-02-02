@@ -1,4 +1,6 @@
-/grootfarm/
+/.vscode/
+/venv/
+/coordinator/client/__pycache__/
 *.pyc
 RPi/mqtt/CONFIG.py
 RPi/mqtt/smart-farming.bin

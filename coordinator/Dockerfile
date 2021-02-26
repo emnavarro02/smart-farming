@@ -11,4 +11,4 @@ ADD password_file /etc/mosquitto/
 ADD client/* /srv/grootfarm/coordinator/client/
 # Default mosquitto port
 EXPOSE 1883/tcp
-CMD ["mosquitto","-c", "/etc/mosquitto/mosquitto.conf"]
+CMD ["mosquitto", "-c", "/etc/mosquitto/mosquitto.conf"]

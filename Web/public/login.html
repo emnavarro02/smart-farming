@@ -33,6 +33,31 @@
     <!-- Main CSS-->
     <link href="css/theme.css" rel="stylesheet" media="all">
 
+    <!-- Firebase -->
+    <!-- The core Firebase JS SDK is always required and must be listed first -->
+    <script src="https://www.gstatic.com/firebasejs/8.1.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.1.1/firebase-database.js"></script>
+    
+    <!-- TODO: Add SDKs for Firebase products that you want to use
+        https://firebase.google.com/docs/web/setup#available-libraries -->
+    <script src="https://www.gstatic.com/firebasejs/ui/4.6.1/firebase-ui-auth.js"></script>
+    <link type="text/css" rel="stylesheet" href="https://www.gstatic.com/firebasejs/ui/4.6.1/firebase-ui-auth.css" />
+
+    <script>
+    // Your web app's Firebase configuration
+    var firebaseConfig = {
+        apiKey: "AIzaSyBfA9oYJI7BlnQ3jiJXajWyIkX_ZCjcaN0",
+        authDomain: "smartgarden-fe7b3.firebaseapp.com",
+        databaseURL: "https://smartgarden-fe7b3.firebaseio.com",
+        projectId: "smartgarden-fe7b3",
+        storageBucket: "smartgarden-fe7b3.appspot.com",
+        messagingSenderId: "791965980860",
+        appId: "1:791965980860:web:11d364eb4f6cad240fd8b9"
+    };
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    </script>    
+
 </head>
 
 <body class="animsition">
